@@ -15,7 +15,7 @@ Hexago is a web-based steganography tool that hides secret messages and images w
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/hexago.git
+   git clone https://github.com/dumbanshm/hexago.git
    cd hexago
    ```
 
