@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexago - Secret Message & Image Encoder/Decoder</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        h1, h2 {
+            color: #2c3e50;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .description {
+            color: #666;
+            margin-bottom: 2rem;
+            text-align: center;
+            font-size: 1.1rem;
+        }
+
+        .section {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+
+        .input-group {
+            margin-bottom: 1.5rem;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            box-sizing: border-box;
+        }
+
+        .file-input {
+            margin-bottom: 1rem;
+        }
+
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 0.8rem 2rem;
+            font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        #status, #decoded-message {
+            margin-top: 1rem;
+            text-align: center;
+            color: #666;
+        }
+
+        .error {
+            color: #e74c3c;
+        }
+
+        .success {
+            color: #27ae60;
+        }
+
+        .decoded-text {
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+            margin-top: 1rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .tab {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+            margin-bottom: -1px;
+        }
+        
+        .tab.active {
+            border: 1px solid #ddd;
+            border-bottom-color: white;
+            background: white;
+            border-radius: 4px 4px 0 0;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .image-preview {
+            max-width: 100%;
+            max-height: 300px;
+            margin: 1rem 0;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        .decoded-image {
+            max-width: 100%;
+            max-height: 300px;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+        
+        .file-input {
+            margin: 1rem 0;
+        }
+        
+        .warning {
+            color: #e67e22;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Hexago</h1>
+        <p class="description">
+            Encode and decode secret messages & images using Go game files (.sgf)
+        </p>
+        
+        <div class="section">
+            <h2>Encode Content</h2>
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('text')">Text Message</div>
+                <div class="tab" onclick="switchTab('image')">Image</div>
+            </div>
+            
+            <div id="text-content" class="tab-content active">
+                <div class="input-group">
+                    <textarea id="message" placeholder="Enter your secret message here..."></textarea>
+                    <button onclick="generateGames('text')">Generate Go Games (.zip)</button>
+                </div>
+            </div>
+            
+            <div id="image-content" class="tab-content">
+                <div class="input-group">
+                    <input type="file" id="image-input" accept="image/*" onchange="previewImage(event)">
+                    <img id="image-preview" class="image-preview">
+                    <p class="warning">Note: Images will be resized to max 64x64 pixels to fit in Go games</p>
+                    <button onclick="generateGames('image')">Generate Go Games (.zip)</button>
+                </div>
+            </div>
+            
+            <div id="status"></div>
+        </div>
+
+        <div class="section">
+            <h2>Decode Content</h2>
+            <div class="input-group">
+                <div class="file-input">
+                    <input type="file" id="sgf-files" accept=".sgf" multiple>
+                </div>
+                <button onclick="decodeFiles()">Decode Files</button>
+            </div>
+            <div id="decoded-content"></div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            document.querySelector(`.tab:nth-child(${tab === 'text' ? '1' : '2'}`).classList.add('active');
+            document.getElementById(`${tab}-content`).classList.add('active');
+        }
+        
+        function previewImage(event) {
+            const preview = document.getElementById('image-preview');
+            const file = event.target.files[0];
+            
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        async function generateGames(type) {
+            const status = document.getElementById('status');
+            
+            try {
+                let response;
+                
+                if (type === 'text') {
+                    const message = document.getElementById('message').value.trim();
+                    if (!message) {
+                        throw new Error('Please enter a message first.');
+                    }
+                    
+                    response = await fetch('/encode', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ message })
+                    });
+                } else {
+                    const imageInput = document.getElementById('image-input');
+                    if (!imageInput.files.length) {
+                        throw new Error('Please select an image first.');
+                    }
+                    
+                    const formData = new FormData();
+                    formData.append('image', imageInput.files[0]);
+                    
+                    response = await fetch('/encode', {
+                        method: 'POST',
+                        body: formData
+                    });
+                }
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to generate games');
+                }
+                
+                const blob = await response.blob();
+                downloadBlob(blob);
+                
+                status.textContent = 'Content encoded successfully!';
+                status.className = 'success';
+            } catch (error) {
+                status.textContent = error.message;
+                status.className = 'error';
+                console.error('Error:', error);
+            }
+        }
+        
+        function downloadBlob(blob) {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'hexago_games.zip';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+        
+        async function decodeFiles() {
+            const fileInput = document.getElementById('sgf-files');
+            const decodedContent = document.getElementById('decoded-content');
+            
+            if (!fileInput.files.length) {
+                decodedContent.textContent = 'Please select one or more .sgf files.';
+                decodedContent.className = 'error';
+                return;
+            }
+            
+            try {
+                decodedContent.textContent = 'Decoding files...';
+                decodedContent.className = '';
+                
+                const formData = new FormData();
+                for (const file of fileInput.files) {
+                    formData.append('file', file);
+                }
+                
+                const response = await fetch('/decode', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to decode files');
+                }
+                
+                const result = await response.json();
+                
+                if (result.type === 'image') {
+                    decodedContent.innerHTML = `
+                        <strong>Decoded Image:</strong><br>
+                        <img src="data:image/png;base64,${result.data}" class="decoded-image">
+                    `;
+                    decodedContent.className = 'success';
+                } else {
+                    decodedContent.innerHTML = `
+                        <strong>Decoded Message:</strong>
+                        <div class="decoded-text">${result.message}</div>
+                    `;
+                    decodedContent.className = 'success';
+                }
+            } catch (error) {
+                decodedContent.textContent = 'Error decoding files. Please try again.';
+                decodedContent.className = 'error';
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html> 
