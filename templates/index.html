@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hexago</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='fonts/fonts.css') }}">
     <style>
         :root {
             --ink: #111111;
@@ -127,7 +125,7 @@
             grid-template-rows: repeat(19, minmax(0, 1fr));
         }
         .pt { display: flex; align-items: center; justify-content: center; }
-        .pt::after { content: ''; border-radius: 50%; }
+        .pt::after { content: ''; border-radius: 50%; transition: background-color 0.12s, border-color 0.12s; }
         .pt.b::after { width: 84%; height: 84%; background: var(--ink); }
         .pt.w::after { width: 84%; height: 84%; background: var(--board); border: 1.5px solid var(--ink); box-sizing: border-box; }
         .pt.h::after { width: 22%; height: 22%; background: var(--ink); }
@@ -254,6 +252,7 @@
         .drop span { font-size: 15px; color: var(--soft); }
 
         .result { display: flex; flex-direction: column; gap: 16px; max-width: 480px; width: 100%; }
+        .result .board { max-width: 480px; }
         .result-box {
             aspect-ratio: 1 / 1;
             width: 100%;
@@ -373,6 +372,10 @@
                     <p class="error" id="decode-error" role="alert"></p>
                 </div>
                 <div class="result">
+                    <div class="board" id="decode-board" role="img" aria-label="Decoding" hidden>
+                        <div class="lines"></div>
+                        <div class="stones" id="decode-stones"></div>
+                    </div>
                     <div class="result-box" id="result-box">Decoded content appears here</div>
                     <div class="result-bar" id="result-bar" hidden>
                         <span class="stats" id="result-meta"></span>
@@ -415,28 +418,64 @@
 
         // ---- Board ----
 
-        const points = [];
-        for (let i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
-            const point = document.createElement('div');
-            point.className = 'pt';
-            $('stones').appendChild(point);
-            points.push(point);
+        const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const SCRAMBLE_INTERVAL_MS = 70;
+        const SCRAMBLE_FLIPS = 28;
+
+        function createBoard(boardEl, stonesEl) {
+            const points = [];
+            for (let i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
+                const point = document.createElement('div');
+                point.className = 'pt' + (HOSHI.has(i) ? ' h' : '');
+                stonesEl.appendChild(point);
+                points.push(point);
+            }
+
+            let timer = null;
+
+            return {
+                draw(sgf) {
+                    const cells = new Array(BOARD_SIZE * BOARD_SIZE).fill('');
+                    let stones = 0;
+                    if (sgf) {
+                        for (const [, color, x, y] of sgf.matchAll(/;([BW])\[([a-s])([a-s])\]/g)) {
+                            const index = (y.charCodeAt(0) - 97) * BOARD_SIZE + (x.charCodeAt(0) - 97);
+                            cells[index] = color === 'B' ? 'b' : 'w';
+                            stones++;
+                        }
+                    }
+                    cells.forEach((cell, i) => {
+                        points[i].className = 'pt ' + (cell || (HOSHI.has(i) ? 'h' : ''));
+                    });
+                    return stones;
+                },
+
+                // Flip random points between black and white until stopped
+                startScramble() {
+                    boardEl.setAttribute('aria-busy', 'true');
+                    if (timer || REDUCED_MOTION) return;
+                    timer = setInterval(() => {
+                        for (let n = 0; n < SCRAMBLE_FLIPS; n++) {
+                            const point = points[Math.floor(Math.random() * points.length)];
+                            point.className = 'pt ' + (Math.random() < 0.5 ? 'b' : 'w');
+                        }
+                    }, SCRAMBLE_INTERVAL_MS);
+                },
+
+                stopScramble() {
+                    boardEl.removeAttribute('aria-busy');
+                    clearInterval(timer);
+                    timer = null;
+                },
+            };
         }
 
-        function drawBoard(sgf) {
-            const cells = new Array(BOARD_SIZE * BOARD_SIZE).fill('');
-            let stones = 0;
-            if (sgf) {
-                for (const [, color, x, y] of sgf.matchAll(/;([BW])\[([a-s])([a-s])\]/g)) {
-                    const index = (y.charCodeAt(0) - 97) * BOARD_SIZE + (x.charCodeAt(0) - 97);
-                    cells[index] = color === 'B' ? 'b' : 'w';
-                    stones++;
-                }
-            }
-            cells.forEach((cell, i) => {
-                points[i].className = 'pt ' + (cell || (HOSHI.has(i) ? 'h' : ''));
-            });
-            return stones;
+        const encodeBoard = createBoard($('board'), $('stones'));
+        const decodeBoard = createBoard($('decode-board'), $('decode-stones'));
+
+        // Keeps the animation on screen long enough to read as a transition
+        function minimumDelay(ms) {
+            return new Promise((resolve) => setTimeout(resolve, REDUCED_MOTION ? 0 : ms));
         }
 
         function gameLabel(index) {
@@ -446,7 +485,7 @@
 
         function showGame(index) {
             state.current = index;
-            const stones = drawBoard(state.games[index]);
+            const stones = encodeBoard.draw(state.games[index]);
             const label = `game_${gameLabel(index)}.sgf`;
             $('board-caption').textContent = `${label} — ${stones} stones`;
             $('board').setAttribute('aria-label', `Board for game ${index + 1} of ${state.games.length}, ${stones} stones`);
@@ -461,7 +500,7 @@
             const count = state.games.length;
 
             if (!count) {
-                drawBoard('');
+                encodeBoard.draw('');
                 $('board-caption').textContent = 'No games yet';
                 $('board').setAttribute('aria-label', 'Empty Go board');
                 $('headline').textContent = 'Hide a message in a game of Go.';
@@ -515,23 +554,27 @@
             $('encode-error').textContent = '';
 
             if (!init) {
+                encodeBoard.stopScramble();
                 state.games = [];
                 renderGames();
                 return;
             }
 
+            encodeBoard.startScramble();
             try {
-                const response = await fetch('/preview', init);
+                const [response] = await Promise.all([fetch('/preview', init), minimumDelay(450)]);
                 const result = await response.json();
                 // Ignore responses that arrive after a newer edit
                 if (requestId !== state.requestId) return;
                 if (!response.ok) throw new Error(result.error || 'Could not encode this content.');
 
+                encodeBoard.stopScramble();
                 state.games = result.games;
                 renderGames();
                 $('stats').textContent = `${result.payload_bytes} bytes · ${result.games.length} ${result.games.length === 1 ? 'game' : 'games'}`;
             } catch (error) {
                 if (requestId !== state.requestId) return;
+                encodeBoard.stopScramble();
                 state.games = [];
                 renderGames();
                 $('encode-error').textContent = error.message;
@@ -558,6 +601,7 @@
         $('kind-image').addEventListener('click', () => setKind('image'));
         $('message').addEventListener('input', () => {
             state.current = 0;
+            if ($('message').value) encodeBoard.startScramble();
             schedulePreview();
         });
 
@@ -578,8 +622,10 @@
             const init = encodeRequestInit();
             if (!init) return;
             $('encode-error').textContent = '';
+            $('download').disabled = true;
+            encodeBoard.startScramble();
             try {
-                const response = await fetch('/encode', init);
+                const [response] = await Promise.all([fetch('/encode', init), minimumDelay(600)]);
                 if (!response.ok) {
                     const result = await response.json();
                     throw new Error(result.error || 'Could not encode this content.');
@@ -594,6 +640,10 @@
                 URL.revokeObjectURL(url);
             } catch (error) {
                 $('encode-error').textContent = error.message;
+            } finally {
+                encodeBoard.stopScramble();
+                $('download').disabled = !state.games.length;
+                if (state.games.length) showGame(state.current);
             }
         });
 
@@ -638,8 +688,14 @@
             const formData = new FormData();
             files.forEach((file) => formData.append('file', file));
 
+            $('result-box').hidden = true;
+            $('decode-board').hidden = false;
+            decodeBoard.startScramble();
             try {
-                const response = await fetch('/decode', { method: 'POST', body: formData });
+                const [response] = await Promise.all([
+                    fetch('/decode', { method: 'POST', body: formData }),
+                    minimumDelay(900),
+                ]);
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.error || 'Could not decode these files.');
 
@@ -664,6 +720,10 @@
                 $('result-bar').hidden = false;
             } catch (error) {
                 $('decode-error').textContent = error.message;
+            } finally {
+                decodeBoard.stopScramble();
+                $('decode-board').hidden = true;
+                $('result-box').hidden = false;
             }
         }
 

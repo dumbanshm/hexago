@@ -61,7 +61,8 @@ Requires Python 3.10 or newer.
   - Text: short messages fit about 43 characters in one game; longer English text compresses to about 60 characters per game
   - Images: resized to fit 64x64 pixels and stored as WebP; usually 2-15 game files
 - **File Order**: Each game's name (`GN[hexago 3/12]`) records its position, so files can be uploaded in any order
-- **Limits**: Uploads are capped at 5 MB
+- **Limits**: Uploads are capped at 5 MB, images at 32 megapixels, and an encoding at 2,000 games
+- **Fonts**: Schibsted Grotesk and IBM Plex Mono are bundled in `static/fonts` (SIL Open Font License), so the page makes no third-party requests
 - **File Format**: Standard SGF (Smart Game Format)
 - **Supported Image Types**: PNG, JPG, JPEG, GIF
 

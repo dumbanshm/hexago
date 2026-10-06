@@ -1,6 +1,7 @@
 import base64
 import io
 import random
+import re
 import zipfile
 
 import pytest
@@ -155,3 +156,48 @@ def test_preview_matches_encode(client):
 def test_preview_rejects_empty_message(client):
     response = client.post('/preview', json={'message': ''})
     assert response.status_code == 400
+
+
+def test_huge_image_dimensions_are_rejected(client):
+    # A tiny file that declares a 10000 x 10000 bitmap
+    img = Image.new('1', (10000, 10000))
+    buffered = io.BytesIO()
+    img.save(buffered, format='PNG')
+    assert len(buffered.getvalue()) < 5 * 1024 * 1024
+    buffered.seek(0)
+    response = client.post('/encode', data={'image': (buffered, 'bomb.png')},
+                           content_type='multipart/form-data')
+    assert response.status_code == 400
+
+
+def test_fonts_are_served_locally(client):
+    page = client.get('/').get_data(as_text=True)
+    assert 'googleapis' not in page and 'gstatic' not in page
+    css = client.get('/static/fonts/fonts.css')
+    assert css.status_code == 200
+    for name in re.findall(r'url\(([^)]+)\)', css.get_data(as_text=True)):
+        assert client.get(f'/static/fonts/{name}').status_code == 200
+
+
+def test_conflicting_games_are_rejected(client):
+    first = encode_text(client, 'first secret')
+    second = encode_text(client, 'second secret')
+    files = [(io.BytesIO(first.read(first.namelist()[0])), 'a.sgf'),
+             (io.BytesIO(second.read(second.namelist()[0])), 'b.sgf')]
+    response = client.post('/decode', data={'file': files}, content_type='multipart/form-data')
+    assert response.status_code == 400
+    assert 'different encodings' in response.json['error']
+
+
+def test_transparent_image_is_put_on_white(client):
+    img = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
+    archive = encode_image(client, img)
+    response = decode(client, archive)
+    decoded = Image.open(io.BytesIO(base64.b64decode(response.json['data']))).convert('RGB')
+    assert min(decoded.getpixel((16, 16))) > 240
+
+
+def test_malformed_json_is_a_client_error(client):
+    response = client.post('/encode', data='{bad', content_type='application/json')
+    assert response.status_code == 400
+    assert 'error' in response.json

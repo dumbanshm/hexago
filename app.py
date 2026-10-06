@@ -6,6 +6,7 @@ import zipfile
 import zlib
 from io import BytesIO
 from PIL import Image
+from werkzeug.exceptions import HTTPException
 
 app = Flask(__name__)
 # Reject oversized uploads before they reach the handlers
@@ -16,6 +17,10 @@ BOARD_SIZE = 19
 LETTERS = 'abcdefghijklmnopqrs'  # SGF uses letters for coordinates
 MAX_IMAGE_SIZE = (64, 64)  # Maximum dimensions for images
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+# Pillow refuses images over twice this many pixels, which stops small
+# uploads that would expand into huge bitmaps in memory
+Image.MAX_IMAGE_PIXELS = 16_000_000
 
 # Payload type markers (first byte of the content)
 TYPE_TEXT = b'T'
@@ -69,7 +74,13 @@ def process_image(image_data):
     """Resize an image to fit the board budget and return it as compact WebP bytes."""
     try:
         img = Image.open(BytesIO(image_data))
-        if img.mode != 'RGB':
+        if img.mode in ('RGBA', 'LA') or 'transparency' in img.info:
+            # Put transparent areas on white instead of whatever color they hide
+            img = img.convert('RGBA')
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            background.paste(img, mask=img.getchannel('A'))
+            img = background
+        elif img.mode != 'RGB':
             img = img.convert('RGB')
 
         # Shrink only, while maintaining aspect ratio
@@ -138,6 +149,8 @@ def decode_games(sgf_contents):
     totals = set()
     for content in sgf_contents:
         index, total, chunk = decode_sgf(content)
+        if chunks.get(index, chunk) != chunk:
+            raise DecodeError('The files come from different encodings.')
         totals.add(total)
         chunks[index] = chunk
 
@@ -221,6 +234,9 @@ def encode_request():
         return payload, encode_payload(payload)
     except ValueError as e:
         return None, (jsonify({'error': str(e)}), 400)
+    except HTTPException:
+        # Oversized or malformed requests keep their own status codes
+        raise
     except Exception:
         app.logger.exception('Encoding failed')
         return None, (jsonify({'error': 'Server error while encoding.'}), 500)
@@ -300,6 +316,11 @@ def decode():
 @app.errorhandler(413)
 def too_large(_):
     return jsonify({'error': 'Upload is too large (5 MB max).'}), 413
+
+
+@app.errorhandler(400)
+def bad_request(_):
+    return jsonify({'error': 'The request could not be understood.'}), 400
 
 
 @app.route('/capacity')
