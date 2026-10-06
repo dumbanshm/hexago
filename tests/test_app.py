@@ -209,6 +209,7 @@ def test_credits_page(client):
     assert response.status_code == 200
     page = response.get_data(as_text=True)
     assert 'Devansh Mehta' in page
+    assert 'https://en.wikipedia.org/wiki/Go_(game)' in page
     assert 'googleapis' not in page and 'gstatic' not in page
 
 
