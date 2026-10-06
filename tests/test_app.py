@@ -210,3 +210,11 @@ def test_credits_page(client):
     page = response.get_data(as_text=True)
     assert 'Devansh Mehta' in page
     assert 'googleapis' not in page and 'gstatic' not in page
+
+
+def test_favicons_are_linked_and_served(client):
+    for page in ('/', '/credits'):
+        html = client.get(page).get_data(as_text=True)
+        for href in re.findall(r'<link rel="(?:icon|apple-touch-icon)" href="([^"]+)"', html):
+            assert client.get(href).status_code == 200
+        assert 'href="/favicon.svg"' in html
