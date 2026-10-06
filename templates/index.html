@@ -435,7 +435,9 @@
 
         $('tab-encode').addEventListener('click', () => setMode('encode'));
         $('tab-decode').addEventListener('click', () => setMode('decode'));
-        window.addEventListener('hashchange', () => setMode(location.hash === '#decode' ? 'decode' : 'encode'));
+        window.addEventListener('hashchange', () => {
+            if (location.hash !== '#lets-chat') setMode(location.hash === '#decode' ? 'decode' : 'encode');
+        });
         if (location.hash === '#decode') setMode('decode');
 
         // ---- Board ----
@@ -750,6 +752,24 @@
         }
 
         $('sgf-files').addEventListener('change', (event) => decodeFiles(event.target.files));
+
+        // Easter egg: /#lets-chat opens the decoder and decodes a game that ships with the site.
+        async function decodeEasterEgg() {
+            setMode('decode');
+            try {
+                const response = await fetch('/easter-egg/lets-chat.sgf');
+                if (!response.ok) throw new Error();
+                const file = new File([await response.blob()], 'lets-chat.sgf');
+                await decodeFiles([file]);
+            } catch {
+                $('decode-error').textContent = 'Could not load the example game. Drop your own .sgf files instead.';
+            }
+        }
+
+        window.addEventListener('hashchange', () => {
+            if (location.hash === '#lets-chat') decodeEasterEgg();
+        });
+        if (location.hash === '#lets-chat') decodeEasterEgg();
 
         const drop = $('drop');
         drop.addEventListener('dragover', (event) => {

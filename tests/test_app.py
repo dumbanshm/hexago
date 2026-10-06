@@ -218,3 +218,12 @@ def test_favicons_are_linked_and_served(client):
         for href in re.findall(r'<link rel="(?:icon|apple-touch-icon)" href="([^"]+)"', html):
             assert client.get(href).status_code == 200
         assert 'href="/favicon.svg"' in html
+
+
+def test_easter_egg_game_decodes(client):
+    sgf = client.get('/easter-egg/lets-chat.sgf')
+    assert sgf.status_code == 200
+    response = client.post('/decode', data={'file': (io.BytesIO(sgf.data), 'lets-chat.sgf')},
+                           content_type='multipart/form-data')
+    assert response.status_code == 200
+    assert response.get_json()['message'] == "Let's chat!"
