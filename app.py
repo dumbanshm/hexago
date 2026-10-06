@@ -8,9 +8,12 @@ from io import BytesIO
 from PIL import Image
 from werkzeug.exceptions import HTTPException
 
-app = Flask(__name__)
-# Reject oversized uploads before they reach the handlers
-app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
+# Static files live in public/ so Vercel can serve them from its CDN; locally
+# Flask serves the same folder at the site root
+app = Flask(__name__, static_folder='public', static_url_path='')
+# Reject oversized uploads before they reach the handlers. Kept under Vercel's
+# 4.5 MB request limit so users see this app's error instead of the platform's
+app.config['MAX_CONTENT_LENGTH'] = 4 * 1024 * 1024
 
 # Constants for Go board
 BOARD_SIZE = 19
@@ -36,7 +39,8 @@ BYTES_PER_GAME = BITS_PER_GAME // 8
 
 # Upper bounds that keep a crafted upload from exhausting memory
 MAX_DECOMPRESSED_SIZE = 1024 * 1024
-MAX_GAMES = 2000
+# Also keeps /preview responses (about 2.2 KB per game) under Vercel's 4.5 MB limit
+MAX_GAMES = 1000
 
 # Game name carries the chunk position so files can be decoded in any order
 GAME_NAME_RE = re.compile(r'GN\[hexago (\d+)/(\d+)\]')
@@ -315,7 +319,7 @@ def decode():
 
 @app.errorhandler(413)
 def too_large(_):
-    return jsonify({'error': 'Upload is too large (5 MB max).'}), 413
+    return jsonify({'error': 'Upload is too large (4 MB max).'}), 413
 
 
 @app.errorhandler(400)

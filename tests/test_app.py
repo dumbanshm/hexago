@@ -173,10 +173,10 @@ def test_huge_image_dimensions_are_rejected(client):
 def test_fonts_are_served_locally(client):
     page = client.get('/').get_data(as_text=True)
     assert 'googleapis' not in page and 'gstatic' not in page
-    css = client.get('/static/fonts/fonts.css')
+    css = client.get('/fonts/fonts.css')
     assert css.status_code == 200
     for name in re.findall(r'url\(([^)]+)\)', css.get_data(as_text=True)):
-        assert client.get(f'/static/fonts/{name}').status_code == 200
+        assert client.get(f'/fonts/{name}').status_code == 200
 
 
 def test_conflicting_games_are_rejected(client):
