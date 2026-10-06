@@ -17,9 +17,13 @@ LETTERS = 'abcdefghijklmnopqrs'  # SGF uses letters for coordinates
 MAX_IMAGE_SIZE = (64, 64)  # Maximum dimensions for images
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
-# Payload type markers (first byte of the decompressed payload)
+# Payload type markers (first byte of the content)
 TYPE_TEXT = b'T'
 TYPE_IMAGE = b'I'
+
+# First byte of every payload: whether the content after it is zlib-compressed
+STORED_RAW = b'R'
+STORED_ZLIB = b'Z'
 
 # Each game holds one bit per stone, and every point on the board is used
 BITS_PER_GAME = BOARD_SIZE * BOARD_SIZE
@@ -88,7 +92,12 @@ def binary_to_bytes(binary):
 
 
 def build_payload(type_marker, data):
-    return zlib.compress(type_marker + data, 9)
+    content = type_marker + data
+    compressed = zlib.compress(content, 9)
+    # zlib adds a few bytes of overhead, so short content is smaller left as is
+    if len(compressed) < len(content):
+        return STORED_ZLIB + compressed
+    return STORED_RAW + content
 
 
 def encode_chunk(chunk, index, total):
@@ -124,7 +133,7 @@ def decode_sgf(sgf_content):
 
 
 def decode_games(sgf_contents):
-    """Reassemble and decompress a payload from SGF games given in any order."""
+    """Reassemble a payload from SGF games given in any order and unpack it."""
     chunks = {}
     totals = set()
     for content in sgf_contents:
@@ -142,9 +151,17 @@ def decode_games(sgf_contents):
         raise DecodeError(f'Missing {len(missing)} of {total} game files.')
 
     payload = b''.join(chunks[i] for i in range(1, total + 1))
+    storage, body = payload[:1], payload[1:]
+    if storage == STORED_RAW:
+        if not body:
+            raise DecodeError('The game files are corrupted.')
+        return body[:1], body[1:]
+    if storage != STORED_ZLIB:
+        raise DecodeError('The game files are corrupted.')
+
     decompressor = zlib.decompressobj()
     try:
-        data = decompressor.decompress(payload, MAX_DECOMPRESSED_SIZE)
+        data = decompressor.decompress(body, MAX_DECOMPRESSED_SIZE)
     except zlib.error:
         raise DecodeError('The game files are corrupted.')
     if decompressor.unconsumed_tail:
@@ -170,43 +187,71 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/encode', methods=['POST'])
-def encode():
+def payload_from_request():
+    """Build the payload for a text or image encode request.
+
+    Raises ValueError with a user-facing message when the request is unusable.
+    """
+    # Handle text message
+    if request.is_json and 'message' in request.json:
+        message = request.json['message']
+        if not isinstance(message, str) or not message:
+            raise ValueError('No message provided')
+        return build_payload(TYPE_TEXT, message.encode('utf-8'))
+
+    # Handle image upload
+    if 'image' in request.files:
+        image = request.files['image']
+        if not image or not image.filename:
+            raise ValueError('No image provided')
+
+        if '.' not in image.filename or \
+           image.filename.rsplit('.', 1)[1].lower() not in ALLOWED_IMAGE_EXTENSIONS:
+            raise ValueError('Invalid image format. Allowed formats: PNG, JPG, JPEG, GIF')
+
+        return build_payload(TYPE_IMAGE, process_image(image.read()))
+
+    raise ValueError('No content provided')
+
+
+def encode_request():
+    """Return (payload, sgf_contents) for the current request, or an error response."""
     try:
-        # Handle text message
-        if request.is_json and 'message' in request.json:
-            message = request.json['message']
-            if not isinstance(message, str) or not message:
-                return jsonify({'error': 'No message provided'}), 400
-            payload = build_payload(TYPE_TEXT, message.encode('utf-8'))
-
-        # Handle image upload
-        elif 'image' in request.files:
-            image = request.files['image']
-            if not image or not image.filename:
-                return jsonify({'error': 'No image provided'}), 400
-
-            if '.' not in image.filename or \
-               image.filename.rsplit('.', 1)[1].lower() not in ALLOWED_IMAGE_EXTENSIONS:
-                return jsonify({'error': 'Invalid image format. Allowed formats: PNG, JPG, JPEG, GIF'}), 400
-
-            payload = build_payload(TYPE_IMAGE, process_image(image.read()))
-        else:
-            return jsonify({'error': 'No content provided'}), 400
-
-        sgf_contents = encode_payload(payload)
+        payload = payload_from_request()
+        return payload, encode_payload(payload)
     except ValueError as e:
-        return jsonify({'error': str(e)}), 400
+        return None, (jsonify({'error': str(e)}), 400)
     except Exception:
         app.logger.exception('Encoding failed')
-        return jsonify({'error': 'Server error while encoding.'}), 500
+        return None, (jsonify({'error': 'Server error while encoding.'}), 500)
+
+
+@app.route('/encode', methods=['POST'])
+def encode():
+    payload, result = encode_request()
+    if payload is None:
+        return result
 
     return send_file(
-        create_zip_file(sgf_contents),
+        create_zip_file(result),
         mimetype='application/zip',
         as_attachment=True,
         download_name='hexago_games.zip'
     )
+
+
+@app.route('/preview', methods=['POST'])
+def preview():
+    """Encode without downloading, so the page can draw the boards."""
+    payload, result = encode_request()
+    if payload is None:
+        return result
+
+    return jsonify({
+        'payload_bytes': len(payload),
+        'bytes_per_game': BYTES_PER_GAME,
+        'games': result,
+    })
 
 
 @app.route('/decode', methods=['POST'])

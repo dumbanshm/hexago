@@ -128,3 +128,30 @@ def test_oversized_upload_is_rejected(client):
 
 def test_debug_mode_is_off_by_default():
     assert hexago.app.debug is False
+
+
+def test_short_text_is_stored_uncompressed():
+    payload = hexago.build_payload(hexago.TYPE_TEXT, b'North gate at dawn. Bring the second key.')
+    assert payload[:1] == hexago.STORED_RAW
+    assert len(hexago.encode_payload(payload)) == 1
+
+
+def test_compressible_text_is_compressed(client):
+    message = 'ab' * 500
+    payload = hexago.build_payload(hexago.TYPE_TEXT, message.encode())
+    assert payload[:1] == hexago.STORED_ZLIB
+    assert decode(client, encode_text(client, message)).json['message'] == message
+
+
+def test_preview_matches_encode(client):
+    message = random_text(300)
+    preview = client.post('/preview', json={'message': message}).json
+    archive = encode_text(client, message)
+    assert preview['games'] == [archive.read(name).decode() for name in archive.namelist()]
+    assert preview['bytes_per_game'] == 45
+    assert preview['payload_bytes'] > 0
+
+
+def test_preview_rejects_empty_message(client):
+    response = client.post('/preview', json={'message': ''})
+    assert response.status_code == 400

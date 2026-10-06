@@ -3,343 +3,685 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hexago - Secret Message & Image Encoder/Decoder</title>
+    <title>Hexago</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --ink: #111111;
+            --paper: #FAFAF7;
+            --board: #FFFFFF;
+            --muted: #55544E;
+            --soft: #3A3934;
+            --well: #E8E7E1;
+            --accent: #C2381A;
+            --sans: 'Schibsted Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+        }
+
+        * { box-sizing: border-box; }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 800px;
+            margin: 0;
+            background: var(--paper);
+            color: var(--ink);
+            font-family: var(--sans);
+        }
+
+        button { font-family: var(--sans); cursor: pointer; }
+        button:disabled { cursor: not-allowed; opacity: 0.45; }
+        button:focus-visible, textarea:focus, .drop:focus-within, .file-pick:focus-within {
+            outline: 3px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip: rect(0 0 0 0);
+            white-space: nowrap;
+        }
+
+        .page {
+            max-width: 1240px;
             margin: 0 auto;
-            padding: 2rem;
-            background: #f5f5f5;
-            color: #333;
+            padding: 32px 32px 72px;
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
         }
 
-        .container {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            border-bottom: 2px solid var(--ink);
+            padding-bottom: 20px;
         }
 
-        h1, h2 {
-            color: #2c3e50;
-            margin-bottom: 1.5rem;
-            text-align: center;
+        .wordmark { font-weight: 900; font-size: 30px; letter-spacing: -0.03em; }
+        .wordmark span { color: var(--accent); }
+
+        .segmented { display: flex; border: 2px solid var(--ink); }
+        .segmented button {
+            min-height: 44px;
+            padding: 0 26px;
+            border: 0;
+            background: transparent;
+            color: var(--ink);
+            font-size: 15px;
+            font-weight: 500;
+        }
+        .segmented button[aria-selected="true"] {
+            background: var(--ink);
+            color: var(--paper);
+            font-weight: 700;
         }
 
-        .description {
-            color: #666;
-            margin-bottom: 2rem;
-            text-align: center;
-            font-size: 1.1rem;
+        .columns {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(520px, 100%), 1fr));
+            gap: 56px;
+            align-items: start;
         }
 
-        .section {
-            margin-bottom: 2rem;
-            padding: 1.5rem;
-            border: 1px solid #eee;
-            border-radius: 4px;
+        h1 {
+            margin: 0;
+            font-weight: 900;
+            font-size: clamp(40px, 5.4vw, 72px);
+            line-height: 0.98;
+            letter-spacing: -0.035em;
+            text-wrap: balance;
         }
 
-        .input-group {
-            margin-bottom: 1.5rem;
+        /* Board */
+        figure { margin: 0; display: flex; flex-direction: column; gap: 14px; }
+
+        .board {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            width: 100%;
+            background: var(--board);
+            border: 2px solid var(--ink);
         }
+        .lines {
+            position: absolute;
+            inset: calc(100% / 38);
+            border-right: 1px solid var(--ink);
+            border-bottom: 1px solid var(--ink);
+            background-image:
+                linear-gradient(var(--ink) 1px, transparent 1px),
+                linear-gradient(90deg, var(--ink) 1px, transparent 1px);
+            background-size: calc(100% / 18) calc(100% / 18);
+        }
+        .stones {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            grid-template-columns: repeat(19, minmax(0, 1fr));
+            grid-template-rows: repeat(19, minmax(0, 1fr));
+        }
+        .pt { display: flex; align-items: center; justify-content: center; }
+        .pt::after { content: ''; border-radius: 50%; }
+        .pt.b::after { width: 84%; height: 84%; background: var(--ink); }
+        .pt.w::after { width: 84%; height: 84%; background: var(--board); border: 1.5px solid var(--ink); box-sizing: border-box; }
+        .pt.h::after { width: 22%; height: 22%; background: var(--ink); }
+
+        .caption {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            font-family: var(--mono);
+            font-size: 13px;
+        }
+
+        .game-picker {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+            gap: 6px;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        .game-picker button {
+            width: 100%;
+            min-height: 44px;
+            border: 2px solid var(--ink);
+            background: transparent;
+            color: var(--ink);
+            font: 500 13px var(--mono);
+        }
+        .game-picker button[aria-current="true"] { background: var(--ink); color: var(--paper); }
+
+        /* Steps */
+        .side { display: flex; flex-direction: column; gap: 40px; }
+        .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 32px; }
+        .steps > li {
+            display: grid;
+            grid-template-columns: 56px minmax(0, 1fr);
+            gap: 16px;
+            border-top: 2px solid var(--ink);
+            padding-top: 16px;
+        }
+        .step-num { font-weight: 900; font-size: 28px; color: var(--accent); }
+        .step-body { display: flex; flex-direction: column; gap: 14px; }
+        .step-body h2 { margin: 0; font-size: 20px; font-weight: 700; }
+        .step-body p { margin: 0; font-size: 16px; line-height: 1.55; color: var(--soft); }
+        .step-body .note { font-size: 14px; color: var(--muted); }
+
+        .kind-toggle { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .kind-toggle button {
+            min-height: 56px;
+            border: 2px solid var(--ink);
+            background: transparent;
+            color: var(--ink);
+            font-size: 16px;
+            font-weight: 500;
+        }
+        .kind-toggle button[aria-pressed="true"] { background: var(--ink); color: var(--paper); font-weight: 700; }
 
         textarea {
             width: 100%;
-            min-height: 150px;
-            padding: 1rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 1rem;
-            margin-bottom: 1rem;
-            box-sizing: border-box;
+            resize: vertical;
+            padding: 14px 16px;
+            border: 2px solid var(--ink);
+            border-radius: 0;
+            background: var(--board);
+            color: var(--ink);
+            font: 400 17px/1.5 var(--sans);
         }
 
-        .file-input {
-            margin-bottom: 1rem;
-        }
-
-        button {
-            background: #3498db;
-            color: white;
-            border: none;
-            padding: 0.8rem 2rem;
-            font-size: 1rem;
-            border-radius: 4px;
-            cursor: pointer;
-            width: 100%;
-            transition: background 0.2s;
-        }
-
-        button:hover {
-            background: #2980b9;
-        }
-
-        button:disabled {
-            background: #bdc3c7;
-            cursor: not-allowed;
-        }
-
-        #status, #decoded-message {
-            margin-top: 1rem;
-            text-align: center;
-            color: #666;
-        }
-
-        .error {
-            color: #e74c3c;
-        }
-
-        .success {
-            color: #27ae60;
-        }
-
-        .decoded-text {
-            padding: 1rem;
-            background: #f8f9fa;
-            border-radius: 4px;
-            margin-top: 1rem;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-
-        .tabs {
+        .file-pick { display: flex; align-items: center; gap: 16px; cursor: pointer; }
+        .thumb {
+            width: 64px;
+            height: 64px;
+            flex: none;
+            background: var(--well);
             display: flex;
-            margin-bottom: 1rem;
-            border-bottom: 1px solid #ddd;
+            align-items: center;
+            justify-content: center;
+            font: 400 11px var(--mono);
+            overflow: hidden;
         }
-        
-        .tab {
-            padding: 0.5rem 1rem;
+        .thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .file-pick-text { display: flex; flex-direction: column; gap: 2px; }
+        .file-pick-text strong { font-weight: 700; }
+        .file-pick-text span { font-size: 14px; color: var(--muted); }
+
+        .stats { font-family: var(--mono); font-size: 14px; color: var(--ink); }
+
+        .primary {
+            min-height: 56px;
+            border: 0;
+            background: var(--accent);
+            color: #FFFFFF;
+            font-size: 17px;
+            font-weight: 700;
+        }
+        .secondary {
+            min-height: 48px;
+            padding: 0 24px;
+            border: 0;
+            background: var(--ink);
+            color: var(--paper);
+            font-size: 15px;
+            font-weight: 700;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .error { margin: 0; color: var(--accent); font-weight: 500; }
+        .error:empty { display: none; }
+
+        /* Decode */
+        .drop {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 48px 28px;
+            border: 2px dashed var(--ink);
             cursor: pointer;
-            border: 1px solid transparent;
-            margin-bottom: -1px;
         }
-        
-        .tab.active {
-            border: 1px solid #ddd;
-            border-bottom-color: white;
-            background: white;
-            border-radius: 4px 4px 0 0;
+        .drop.dragging { background: var(--well); }
+        .drop strong { font-size: 20px; }
+        .drop span { font-size: 15px; color: var(--soft); }
+
+        .result { display: flex; flex-direction: column; gap: 16px; max-width: 480px; width: 100%; }
+        .result-box {
+            aspect-ratio: 1 / 1;
+            width: 100%;
+            background: var(--well);
+            border: 2px solid var(--ink);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 24px;
+            font: 400 14px var(--mono);
+            color: var(--soft);
         }
-        
-        .tab-content {
-            display: none;
+        .result-box img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+        .result-box.has-text {
+            aspect-ratio: auto;
+            min-height: 200px;
+            align-items: flex-start;
+            justify-content: flex-start;
+            text-align: left;
+            background: var(--board);
+            font: 500 22px/1.45 var(--sans);
+            color: var(--ink);
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
         }
-        
-        .tab-content.active {
-            display: block;
-        }
-        
-        .image-preview {
-            max-width: 100%;
-            max-height: 300px;
-            margin: 1rem 0;
-            border-radius: 4px;
-            display: none;
-        }
-        
-        .decoded-image {
-            max-width: 100%;
-            max-height: 300px;
-            margin: 1rem 0;
-            border-radius: 4px;
-        }
-        
-        .file-input {
-            margin: 1rem 0;
-        }
-        
-        .warning {
-            color: #e67e22;
-            font-size: 0.9rem;
-            margin-top: 0.5rem;
+        .result-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+
+        [hidden] { display: none !important; }
+
+        @media (max-width: 600px) {
+            .page { padding: 20px 16px 56px; gap: 28px; }
+            .columns { gap: 36px; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎮 Hexago</h1>
-        <p class="description">
-            Encode and decode secret messages & images using Go game files (.sgf)
-        </p>
-        
-        <div class="section">
-            <h2>Encode Content</h2>
-            <div class="tabs">
-                <div class="tab active" onclick="switchTab('text')">Text Message</div>
-                <div class="tab" onclick="switchTab('image')">Image</div>
+    <div class="page">
+        <header>
+            <span class="wordmark">Hexago<span>.</span></span>
+            <div class="segmented" role="tablist" aria-label="Mode">
+                <button role="tab" id="tab-encode" aria-selected="true" aria-controls="view-encode">Encode</button>
+                <button role="tab" id="tab-decode" aria-selected="false" aria-controls="view-decode">Decode</button>
             </div>
-            
-            <div id="text-content" class="tab-content active">
-                <div class="input-group">
-                    <textarea id="message" placeholder="Enter your secret message here..."></textarea>
-                    <button onclick="generateGames('text')">Generate Go Games (.zip)</button>
-                </div>
-            </div>
-            
-            <div id="image-content" class="tab-content">
-                <div class="input-group">
-                    <input type="file" id="image-input" accept="image/*" onchange="previewImage(event)">
-                    <img id="image-preview" class="image-preview">
-                    <p class="warning">Note: Images will be resized to max 64x64 pixels to fit in Go games</p>
-                    <button onclick="generateGames('image')">Generate Go Games (.zip)</button>
-                </div>
-            </div>
-            
-            <div id="status"></div>
-        </div>
+        </header>
 
-        <div class="section">
-            <h2>Decode Content</h2>
-            <div class="input-group">
-                <div class="file-input">
-                    <input type="file" id="sgf-files" accept=".sgf" multiple>
+        <main>
+            <section id="view-encode" role="tabpanel" aria-labelledby="tab-encode" class="columns">
+                <figure>
+                    <div class="board" role="img" id="board" aria-label="Empty Go board">
+                        <div class="lines"></div>
+                        <div class="stones" id="stones"></div>
+                    </div>
+                    <figcaption class="caption">
+                        <span id="board-caption">No games yet</span>
+                        <span>● 1 &nbsp; ○ 0</span>
+                    </figcaption>
+                    <ul class="game-picker" id="game-picker" aria-label="Games"></ul>
+                </figure>
+
+                <div class="side">
+                    <h1 id="headline">Hide a message in a game of Go.</h1>
+
+                    <ol class="steps">
+                        <li>
+                            <span class="step-num" aria-hidden="true">01</span>
+                            <div class="step-body">
+                                <h2>Choose what to hide</h2>
+                                <div class="kind-toggle">
+                                    <button id="kind-text" aria-pressed="true">Text</button>
+                                    <button id="kind-image" aria-pressed="false">Image</button>
+                                </div>
+                                <div id="text-input">
+                                    <label for="message" class="visually-hidden">Secret message</label>
+                                    <textarea id="message" rows="5" placeholder="Type your secret message"></textarea>
+                                </div>
+                                <label class="file-pick" id="image-input" hidden>
+                                    <span class="thumb" id="thumb">[img]</span>
+                                    <span class="file-pick-text">
+                                        <strong id="image-name">Choose an image</strong>
+                                        <span>PNG, JPG or GIF · shrunk to fit 64 × 64 px</span>
+                                    </span>
+                                    <input type="file" id="image" accept=".png,.jpg,.jpeg,.gif" class="visually-hidden">
+                                </label>
+                                <p class="error" id="encode-error" role="alert"></p>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="step-num" aria-hidden="true">02</span>
+                            <div class="step-body">
+                                <h2>Check the games</h2>
+                                <p>Each game carries 45 bytes. Click a number to see its board.</p>
+                                <span class="stats" id="stats" aria-live="polite"></span>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="step-num" aria-hidden="true">03</span>
+                            <div class="step-body">
+                                <h2>Send them, in any order</h2>
+                                <button class="primary" id="download" disabled>Download games (.zip)</button>
+                                <p class="note">Hidden, not encrypted. Encrypt sensitive content first.</p>
+                            </div>
+                        </li>
+                    </ol>
                 </div>
-                <button onclick="decodeFiles()">Decode Files</button>
-            </div>
-            <div id="decoded-content"></div>
-        </div>
+            </section>
+
+            <section id="view-decode" role="tabpanel" aria-labelledby="tab-decode" class="columns" hidden>
+                <div class="side" style="gap: 28px">
+                    <h1>Read the games back.</h1>
+                    <label class="drop" id="drop">
+                        <strong>Drop .sgf files</strong>
+                        <span>All of them, in any order.</span>
+                        <input type="file" id="sgf-files" accept=".sgf" multiple class="visually-hidden">
+                    </label>
+                    <p class="stats" id="decode-status" aria-live="polite"></p>
+                    <p class="error" id="decode-error" role="alert"></p>
+                </div>
+                <div class="result">
+                    <div class="result-box" id="result-box">Decoded content appears here</div>
+                    <div class="result-bar" id="result-bar" hidden>
+                        <span class="stats" id="result-meta"></span>
+                        <a class="secondary" id="save-image" download="hexago_image.png" hidden>Save PNG</a>
+                    </div>
+                </div>
+            </section>
+        </main>
     </div>
 
     <script>
-        function switchTab(tab) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            
-            document.querySelector(`.tab:nth-child(${tab === 'text' ? '1' : '2'}`).classList.add('active');
-            document.getElementById(`${tab}-content`).classList.add('active');
+        const BOARD_SIZE = 19;
+        const HOSHI = new Set([60, 66, 72, 174, 180, 186, 288, 294, 300]);
+        const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
+            'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
+            'seventeen', 'eighteen', 'nineteen', 'twenty'];
+
+        const $ = (id) => document.getElementById(id);
+
+        const state = {
+            kind: 'text',
+            games: [],
+            current: 0,
+            imageFile: null,
+            requestId: 0,
+        };
+
+        // ---- Mode tabs ----
+
+        function setMode(mode) {
+            const encode = mode === 'encode';
+            $('tab-encode').setAttribute('aria-selected', String(encode));
+            $('tab-decode').setAttribute('aria-selected', String(!encode));
+            $('view-encode').hidden = !encode;
+            $('view-decode').hidden = encode;
         }
-        
-        function previewImage(event) {
-            const preview = document.getElementById('image-preview');
-            const file = event.target.files[0];
-            
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    preview.src = e.target.result;
-                    preview.style.display = 'block';
+
+        $('tab-encode').addEventListener('click', () => setMode('encode'));
+        $('tab-decode').addEventListener('click', () => setMode('decode'));
+
+        // ---- Board ----
+
+        const points = [];
+        for (let i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
+            const point = document.createElement('div');
+            point.className = 'pt';
+            $('stones').appendChild(point);
+            points.push(point);
+        }
+
+        function drawBoard(sgf) {
+            const cells = new Array(BOARD_SIZE * BOARD_SIZE).fill('');
+            let stones = 0;
+            if (sgf) {
+                for (const [, color, x, y] of sgf.matchAll(/;([BW])\[([a-s])([a-s])\]/g)) {
+                    const index = (y.charCodeAt(0) - 97) * BOARD_SIZE + (x.charCodeAt(0) - 97);
+                    cells[index] = color === 'B' ? 'b' : 'w';
+                    stones++;
                 }
-                reader.readAsDataURL(file);
             }
+            cells.forEach((cell, i) => {
+                points[i].className = 'pt ' + (cell || (HOSHI.has(i) ? 'h' : ''));
+            });
+            return stones;
         }
-        
-        async function generateGames(type) {
-            const status = document.getElementById('status');
-            
-            try {
-                let response;
-                
-                if (type === 'text') {
-                    const message = document.getElementById('message').value.trim();
-                    if (!message) {
-                        throw new Error('Please enter a message first.');
-                    }
-                    
-                    response = await fetch('/encode', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ message })
-                    });
-                } else {
-                    const imageInput = document.getElementById('image-input');
-                    if (!imageInput.files.length) {
-                        throw new Error('Please select an image first.');
-                    }
-                    
-                    const formData = new FormData();
-                    formData.append('image', imageInput.files[0]);
-                    
-                    response = await fetch('/encode', {
-                        method: 'POST',
-                        body: formData
-                    });
-                }
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to generate games');
-                }
-                
-                const blob = await response.blob();
-                downloadBlob(blob);
-                
-                status.textContent = 'Content encoded successfully!';
-                status.className = 'success';
-            } catch (error) {
-                status.textContent = error.message;
-                status.className = 'error';
-                console.error('Error:', error);
-            }
+
+        function gameLabel(index) {
+            const width = String(state.games.length).length;
+            return String(index + 1).padStart(width, '0');
         }
-        
-        function downloadBlob(blob) {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'hexago_games.zip';
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
+
+        function showGame(index) {
+            state.current = index;
+            const stones = drawBoard(state.games[index]);
+            const label = `game_${gameLabel(index)}.sgf`;
+            $('board-caption').textContent = `${label} — ${stones} stones`;
+            $('board').setAttribute('aria-label', `Board for game ${index + 1} of ${state.games.length}, ${stones} stones`);
+            document.querySelectorAll('#game-picker button').forEach((button, i) => {
+                button.setAttribute('aria-current', String(i === index));
+            });
         }
-        
-        async function decodeFiles() {
-            const fileInput = document.getElementById('sgf-files');
-            const decodedContent = document.getElementById('decoded-content');
-            
-            if (!fileInput.files.length) {
-                decodedContent.textContent = 'Please select one or more .sgf files.';
-                decodedContent.className = 'error';
+
+        function renderGames() {
+            const picker = $('game-picker');
+            picker.replaceChildren();
+            const count = state.games.length;
+
+            if (!count) {
+                drawBoard('');
+                $('board-caption').textContent = 'No games yet';
+                $('board').setAttribute('aria-label', 'Empty Go board');
+                $('headline').textContent = 'Hide a message in a game of Go.';
+                $('stats').textContent = '';
+                $('download').disabled = true;
+                $('download').textContent = 'Download games (.zip)';
                 return;
             }
-            
-            try {
-                decodedContent.textContent = 'Decoding files...';
-                decodedContent.className = '';
-                
-                const formData = new FormData();
-                for (const file of fileInput.files) {
-                    formData.append('file', file);
-                }
-                
-                const response = await fetch('/decode', {
-                    method: 'POST',
-                    body: formData
+
+            if (count > 1) {
+                state.games.forEach((_, i) => {
+                    const item = document.createElement('li');
+                    const button = document.createElement('button');
+                    button.textContent = gameLabel(i);
+                    button.setAttribute('aria-label', `Show game ${i + 1}`);
+                    button.addEventListener('click', () => showGame(i));
+                    item.appendChild(button);
+                    picker.appendChild(item);
                 });
-                
+            }
+            showGame(Math.min(state.current, count - 1));
+
+            const noun = state.kind === 'text' ? 'message' : 'image';
+            const words = count <= 20 ? NUMBER_WORDS[count] : String(count);
+            $('headline').textContent = `Your ${noun}, as ${words} ${count === 1 ? 'game' : 'games'} of Go.`;
+            $('download').disabled = false;
+            $('download').textContent = `Download ${count} ${count === 1 ? 'game' : 'games'} (.zip)`;
+        }
+
+        // ---- Encoding ----
+
+        function encodeRequestInit() {
+            if (state.kind === 'text') {
+                const message = $('message').value;
+                if (!message) return null;
+                return {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message }),
+                };
+            }
+            if (!state.imageFile) return null;
+            const formData = new FormData();
+            formData.append('image', state.imageFile);
+            return { method: 'POST', body: formData };
+        }
+
+        async function refreshPreview() {
+            const requestId = ++state.requestId;
+            const init = encodeRequestInit();
+            $('encode-error').textContent = '';
+
+            if (!init) {
+                state.games = [];
+                renderGames();
+                return;
+            }
+
+            try {
+                const response = await fetch('/preview', init);
                 const result = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(result.error || 'Failed to decode files');
-                }
-                
-                if (result.type === 'image') {
-                    decodedContent.innerHTML = `
-                        <strong>Decoded Image:</strong><br>
-                        <img src="data:image/png;base64,${result.data}" class="decoded-image">
-                    `;
-                    decodedContent.className = 'success';
-                } else {
-                    // Decoded text comes from uploaded files, so never treat it as HTML
-                    const heading = document.createElement('strong');
-                    heading.textContent = 'Decoded Message:';
-                    const text = document.createElement('div');
-                    text.className = 'decoded-text';
-                    text.textContent = result.message;
-                    decodedContent.replaceChildren(heading, text);
-                    decodedContent.className = 'success';
-                }
+                // Ignore responses that arrive after a newer edit
+                if (requestId !== state.requestId) return;
+                if (!response.ok) throw new Error(result.error || 'Could not encode this content.');
+
+                state.games = result.games;
+                renderGames();
+                $('stats').textContent = `${result.payload_bytes} bytes · ${result.games.length} ${result.games.length === 1 ? 'game' : 'games'}`;
             } catch (error) {
-                decodedContent.textContent = error.message || 'Error decoding files. Please try again.';
-                decodedContent.className = 'error';
-                console.error('Error:', error);
+                if (requestId !== state.requestId) return;
+                state.games = [];
+                renderGames();
+                $('encode-error').textContent = error.message;
             }
         }
+
+        let previewTimer;
+        function schedulePreview() {
+            clearTimeout(previewTimer);
+            previewTimer = setTimeout(refreshPreview, 250);
+        }
+
+        function setKind(kind) {
+            state.kind = kind;
+            state.current = 0;
+            $('kind-text').setAttribute('aria-pressed', String(kind === 'text'));
+            $('kind-image').setAttribute('aria-pressed', String(kind === 'image'));
+            $('text-input').hidden = kind !== 'text';
+            $('image-input').hidden = kind !== 'image';
+            refreshPreview();
+        }
+
+        $('kind-text').addEventListener('click', () => setKind('text'));
+        $('kind-image').addEventListener('click', () => setKind('image'));
+        $('message').addEventListener('input', () => {
+            state.current = 0;
+            schedulePreview();
+        });
+
+        $('image').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            state.imageFile = file;
+            state.current = 0;
+            $('image-name').textContent = file.name;
+            const thumb = document.createElement('img');
+            thumb.alt = '';
+            thumb.src = URL.createObjectURL(file);
+            $('thumb').replaceChildren(thumb);
+            refreshPreview();
+        });
+
+        $('download').addEventListener('click', async () => {
+            const init = encodeRequestInit();
+            if (!init) return;
+            $('encode-error').textContent = '';
+            try {
+                const response = await fetch('/encode', init);
+                if (!response.ok) {
+                    const result = await response.json();
+                    throw new Error(result.error || 'Could not encode this content.');
+                }
+                const url = URL.createObjectURL(await response.blob());
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'hexago_games.zip';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                $('encode-error').textContent = error.message;
+            }
+        });
+
+        // ---- Decoding ----
+
+        function resetResult() {
+            const box = $('result-box');
+            box.className = 'result-box';
+            box.textContent = 'Decoded content appears here';
+            $('result-bar').hidden = true;
+            $('save-image').hidden = true;
+        }
+
+        async function describeFiles(files) {
+            const positions = new Set();
+            let total = null;
+            for (const file of files) {
+                const match = (await file.text()).match(/GN\[hexago (\d+)\/(\d+)\]/);
+                if (match) {
+                    positions.add(match[1]);
+                    total = Number(match[2]);
+                }
+            }
+            if (total === null) return `${files.length} ${files.length === 1 ? 'file' : 'files'}`;
+            const complete = positions.size === total ? 'complete' : `${total - positions.size} missing`;
+            return `${positions.size} of ${total} games · ${complete}`;
+        }
+
+        async function decodeFiles(fileList) {
+            const files = Array.from(fileList).filter((file) => file.name.toLowerCase().endsWith('.sgf'));
+            $('decode-error').textContent = '';
+            resetResult();
+
+            if (!files.length) {
+                $('decode-status').textContent = '';
+                $('decode-error').textContent = 'Choose one or more .sgf files.';
+                return;
+            }
+
+            $('decode-status').textContent = await describeFiles(files);
+
+            const formData = new FormData();
+            files.forEach((file) => formData.append('file', file));
+
+            try {
+                const response = await fetch('/decode', { method: 'POST', body: formData });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || 'Could not decode these files.');
+
+                const box = $('result-box');
+                if (result.type === 'image') {
+                    const src = `data:image/png;base64,${result.data}`;
+                    const img = document.createElement('img');
+                    img.alt = 'Decoded image';
+                    img.src = src;
+                    img.addEventListener('load', () => {
+                        $('result-meta').textContent = `${img.naturalWidth} × ${img.naturalHeight} px`;
+                    });
+                    box.replaceChildren(img);
+                    $('save-image').href = src;
+                    $('save-image').hidden = false;
+                } else {
+                    // Decoded text comes from uploaded files, so never treat it as HTML
+                    box.className = 'result-box has-text';
+                    box.textContent = result.message;
+                    $('result-meta').textContent = `${[...result.message].length} characters`;
+                }
+                $('result-bar').hidden = false;
+            } catch (error) {
+                $('decode-error').textContent = error.message;
+            }
+        }
+
+        $('sgf-files').addEventListener('change', (event) => decodeFiles(event.target.files));
+
+        const drop = $('drop');
+        drop.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            drop.classList.add('dragging');
+        });
+        drop.addEventListener('dragleave', () => drop.classList.remove('dragging'));
+        drop.addEventListener('drop', (event) => {
+            event.preventDefault();
+            drop.classList.remove('dragging');
+            decodeFiles(event.dataTransfer.files);
+        });
+
+        renderGames();
     </script>
 </body>
-</html> 
+</html>

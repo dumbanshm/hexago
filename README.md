@@ -45,20 +45,20 @@ Requires Python 3.10 or newer.
    ```
 
 3. To encode content:
-   - Select the "Text Message" tab to encode text
-   - Select the "Image" tab to encode images
-   - Click "Generate Go Games" to get your encoded SGF files
+   - Choose Text or Image and enter your message or pick an image
+   - The board previews each game as you type; click a game number to see its board
+   - Click "Download games (.zip)" to get your encoded SGF files
 
 4. To decode content:
-   - Upload the SGF file(s) in the decode section
-   - Click "Decode Files" to reveal the hidden content
+   - Switch to Decode and drop in all the SGF files, in any order
+   - The hidden message or image appears on the right
 
 ## Technical Details
 
 - **Board Size**: 19x19 standard Go board
-- **Encoding Method**: Content is zlib-compressed, then stored one bit per stone (black = 1, white = 0), filling all 361 points of the board in a spiral from the center
-- **Capacity**: 45 bytes of compressed data per game file
-  - Text: typical English text is about 60 characters per game file
+- **Encoding Method**: Content is zlib-compressed when that makes it smaller (short messages are stored as is), then stored one bit per stone (black = 1, white = 0), filling all 361 points of the board in a spiral from the center
+- **Capacity**: 45 bytes per game file
+  - Text: short messages fit about 43 characters in one game; longer English text compresses to about 60 characters per game
   - Images: resized to fit 64x64 pixels and stored as WebP; usually 2-15 game files
 - **File Order**: Each game's name (`GN[hexago 3/12]`) records its position, so files can be uploaded in any order
 - **Limits**: Uploads are capped at 5 MB
