@@ -204,6 +204,11 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/credits')
+def credits():
+    return render_template('credits.html')
+
+
 def payload_from_request():
     """Build the payload for a text or image encode request.
 

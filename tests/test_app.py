@@ -201,3 +201,12 @@ def test_malformed_json_is_a_client_error(client):
     response = client.post('/encode', data='{bad', content_type='application/json')
     assert response.status_code == 400
     assert 'error' in response.json
+
+
+def test_credits_page(client):
+    assert 'href="/credits"' in client.get('/').get_data(as_text=True)
+    response = client.get('/credits')
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+    assert 'Devansh Mehta' in page
+    assert 'googleapis' not in page and 'gstatic' not in page
