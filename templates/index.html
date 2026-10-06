@@ -429,10 +429,14 @@
             $('tab-decode').setAttribute('aria-selected', String(!encode));
             $('view-encode').hidden = !encode;
             $('view-decode').hidden = encode;
+            // Keep the URL in step so /#decode can be linked to directly.
+            history.replaceState(null, '', encode ? location.pathname + location.search : '#decode');
         }
 
         $('tab-encode').addEventListener('click', () => setMode('encode'));
         $('tab-decode').addEventListener('click', () => setMode('decode'));
+        window.addEventListener('hashchange', () => setMode(location.hash === '#decode' ? 'decode' : 'encode'));
+        if (location.hash === '#decode') setMode('decode');
 
         // ---- Board ----
 
