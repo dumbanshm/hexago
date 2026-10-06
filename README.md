@@ -5,13 +5,15 @@ Hexago is a web-based steganography tool that hides secret messages and images w
 ## Features
 
 - **Text Encoding**: Hide text messages, including special characters and emojis
-- **Image Encoding**: Hide images (automatically resized to 64x64 pixels)
-- **Multi-File Support**: Automatically splits large content across multiple game files
+- **Image Encoding**: Hide images (automatically resized to fit 64x64 pixels)
+- **Multi-File Support**: Automatically splits large content across multiple game files, which can be decoded in any order
 - **Valid SGF Files**: All generated files are valid Go game records
 - **UTF-8 Support**: Full support for international characters and emojis
 - **Web Interface**: Clean, modern UI for easy encoding and decoding
 
 ## Installation
+
+Requires Python 3.10 or newer.
 
 1. Clone the repository:
    ```bash
@@ -54,25 +56,38 @@ Hexago is a web-based steganography tool that hides secret messages and images w
 ## Technical Details
 
 - **Board Size**: 19x19 standard Go board
-- **Encoding Method**: Uses black stones for 1s, white stones for 0s
-- **Maximum Capacity**: 
-  - Text: ~22 characters per game file (UTF-8 encoded)
-  - Images: Automatically resized to 64x64 pixels
+- **Encoding Method**: Content is zlib-compressed, then stored one bit per stone (black = 1, white = 0), filling all 361 points of the board in a spiral from the center
+- **Capacity**: 45 bytes of compressed data per game file
+  - Text: typical English text is about 60 characters per game file
+  - Images: resized to fit 64x64 pixels and stored as WebP; usually 2-15 game files
+- **File Order**: Each game's name (`GN[hexago 3/12]`) records its position, so files can be uploaded in any order
+- **Limits**: Uploads are capped at 5 MB
 - **File Format**: Standard SGF (Smart Game Format)
 - **Supported Image Types**: PNG, JPG, JPEG, GIF
 
 ## Dependencies
 
-- Flask 3.0.2
-- Pillow 11.2.1
-- Werkzeug 3.0.1
-- NumPy 2.2.6
+- Flask 3.1.3
+- Pillow 12.3.0
+- Werkzeug 3.1.9
+
+## Development
+
+Run the tests:
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+Flask's debug mode is off by default. Turn it on only on your own machine with `FLASK_DEBUG=1 python app.py`.
 
 ## Security Considerations
 
 - The tool uses standard steganography techniques
 - The encoded messages are not encrypted
 - For sensitive data, consider encrypting the message before encoding
+- The stone pattern is not a realistic game, and viewers that apply capture rules will remove some stones when replaying it; the hidden data is read from the file itself and is unaffected
+- Files made by versions before this format change cannot be decoded
 
 ## Contributing
 

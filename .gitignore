@@ -46,3 +46,6 @@ Thumbs.db
 # Project specific
 output/
 *.zip 
+# Local test tooling
+.v/
+.pytest_cache/

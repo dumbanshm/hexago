@@ -312,11 +312,11 @@
                     body: formData
                 });
                 
-                if (!response.ok) {
-                    throw new Error('Failed to decode files');
-                }
-                
                 const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to decode files');
+                }
                 
                 if (result.type === 'image') {
                     decodedContent.innerHTML = `
@@ -325,14 +325,17 @@
                     `;
                     decodedContent.className = 'success';
                 } else {
-                    decodedContent.innerHTML = `
-                        <strong>Decoded Message:</strong>
-                        <div class="decoded-text">${result.message}</div>
-                    `;
+                    // Decoded text comes from uploaded files, so never treat it as HTML
+                    const heading = document.createElement('strong');
+                    heading.textContent = 'Decoded Message:';
+                    const text = document.createElement('div');
+                    text.className = 'decoded-text';
+                    text.textContent = result.message;
+                    decodedContent.replaceChildren(heading, text);
                     decodedContent.className = 'success';
                 }
             } catch (error) {
-                decodedContent.textContent = 'Error decoding files. Please try again.';
+                decodedContent.textContent = error.message || 'Error decoding files. Please try again.';
                 decodedContent.className = 'error';
                 console.error('Error:', error);
             }
